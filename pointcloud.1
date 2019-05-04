@@ -74,10 +74,14 @@ int main(int argc, char ** argv) {
 	Mat rgb, depth, prgb;
 	rgb = imread("color0.jpg");
 	depth = imread("depth0.pgm", IMREAD_UNCHANGED);
+	
+	
 	Mat rgb_0;
 	int width = rgb.cols, height = rgb.rows;
 	Size dsize(round(480 / 986 * width), round(640 / 1296 * height));
-	resize(rgb, rgb_0, dsize);
+	resize(rgb, rgb_0, dsize);				//there is also something changed!
+	
+	
 	depth2pcolor(prgb, depth, 2);
 
 	Mat test;

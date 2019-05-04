@@ -1,0 +1,118 @@
+#include <iostream>
+#include <string>
+using namespace std;
+
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/features2d/features2d.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+using namespace cv;
+
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
+
+typedef pcl::PointXYZRGBA PointT;
+typedef pcl::PointCloud<PointT> PointCloud;
+
+
+
+
+const double camera_factor = 1000;
+const double camera_cx = 319.500000;
+const double camera_cy = 239.500000;
+const double camera_fx = 571.623718;
+const double camera_fy = 571.623718;
+
+
+// In parameter: destination image, depth image, pcolortype
+// Out parameter: none
+// Function: convert a depth image to a false color image
+// Include: #include <opencv2/imgproc/imgproc.hpp>
+void depth2pcolor(Mat & pcolor, const Mat & depth, int pcolortype = 2) {
+	/*
+	COLORMAP_AUTUMN = 0, //!< ![autumn](pics/colormaps/colorscale_autumn.jpg)
+	COLORMAP_BONE = 1, //!< ![bone](pics/colormaps/colorscale_bone.jpg)
+	COLORMAP_JET = 2, //!< ![jet](pics/colormaps/colorscale_jet.jpg)
+	COLORMAP_WINTER = 3, //!< ![winter](pics/colormaps/colorscale_winter.jpg)
+	COLORMAP_RAINBOW = 4, //!< ![rainbow](pics/colormaps/colorscale_rainbow.jpg)
+	COLORMAP_OCEAN = 5, //!< ![ocean](pics/colormaps/colorscale_ocean.jpg)
+	COLORMAP_SUMMER = 6, //!< ![summer](pics/colormaps/colorscale_summer.jpg)
+	COLORMAP_SPRING = 7, //!< ![spring](pics/colormaps/colorscale_spring.jpg)
+	COLORMAP_COOL = 8, //!< ![cool](pics/colormaps/colorscale_cool.jpg)
+	COLORMAP_HSV = 9, //!< ![HSV](pics/colormaps/colorscale_hsv.jpg)
+	COLORMAP_PINK = 10, //!< ![pink](pics/colormaps/colorscale_pink.jpg)
+	COLORMAP_HOT = 11, //!< ![hot](pics/colormaps/colorscale_hot.jpg)
+	COLORMAP_PARULA = 12 //!< ![parula](pics/colormaps/colorscale_parula.jpg)
+	 */
+	 // the maximum/minimux pixel value in depth image;
+	double max = 0, min = 0;
+	int cols = depth.cols;
+	int rows = depth.rows;
+	for (int i = 0; i < rows; i++) {
+		for (int j = 0; j < cols; j++) {
+			ushort d = depth.at<ushort>(i, j);
+			if (d <= min && d != 0) {
+				min = d;
+			}
+			if (d >= max) {
+				max = d;
+			}
+		}
+	}
+
+	double alpha = 255.0 / (max - min);
+	// expand your range to 0..255. Similar to histEq();
+	Mat grayImage;
+	depth.convertTo(grayImage, CV_8UC1, alpha, -alpha * min);
+	//It converts your grayscale image into a tone-mapped one,
+	// much more pleasing for the eye function is found in contrib module,
+	// so include contrib.hpp  and link accordingly
+	applyColorMap(grayImage, pcolor, pcolortype);
+}
+
+int main(int argc, char ** argv) {
+	Mat rgb, depth, prgb;
+	rgb = imread("color0.jpg");
+	depth = imread("depth0.pgm", IMREAD_UNCHANGED);
+	Mat rgb_0;
+	int width = rgb.cols, height = rgb.rows;
+	Size dsize(round(480 / 986 * width), round(640 / 1296 * height));
+	resize(rgb, rgb_0, dsize);
+	depth2pcolor(prgb, depth, 2);
+
+	Mat test;
+	PointCloud::Ptr cloud(new PointCloud);
+
+
+	int sum = 0;
+	for (int m = 0; m < depth.rows; m++)
+		for (int n = 0; n < depth.cols; n++) {
+			ushort d = depth.ptr<ushort>(m)[n];
+			if (d == 0)
+				continue;
+			PointT p;
+			p.z = double(d) / camera_factor;
+			p.x = (n - camera_cx) * p.z / camera_fx;
+			p.y = (m - camera_cy) * p.z / camera_fy;
+			p.b = rgb_0.ptr<uchar>(m)[n * 3];
+			p.g = rgb_0.ptr<uchar>(m)[n * 3 + 1];
+			p.r = rgb_0.ptr<uchar>(m)[n * 3 + 2];		
+			cloud->points.push_back(p);
+		}
+
+	cloud->height = 1;
+	cloud->width = cloud->points.size();
+	cout << "point cloud size = " << cloud->points.size() << endl;
+	cloud->is_dense = true;
+	pcl::io::savePCDFile("nice.pcd", *cloud);
+
+	cloud->points.clear();
+	cout << "Point cloud saved" << endl;
+
+	imshow("prgb", prgb);
+	imshow("rgb", rgb);
+	imshow("depth", depth);
+
+	waitKey(0);
+	return 0;
+}
